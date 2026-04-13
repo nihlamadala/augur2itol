@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "augur2itol"
+version = "0.1.0"
+description = "Convert Nextstrain Auspice JSON to iTOL-ready tree and datasets"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+augur2itol = "augur2itol.cli:main"
+[tool.setuptools]
+packages = ["augur2itol"]

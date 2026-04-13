@@ -1,0 +1,18 @@
+# build / generated outputs
+out/
+__pycache__/
+*.pyc
+
+# packaging artifacts
+*.egg-info/
+dist/
+build/
+
+# local env/secrets
+.env
+.env.*
+*.key
+
+# structures: keep big binaries out of git (use GitHub Releases)
+*.pdb
+demo_structures/
