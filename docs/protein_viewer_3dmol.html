@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>3Dmol Mutation Viewer</title>
+  <script src="https://3Dmol.org/build/3Dmol-min.js"></script>
+  <style>
+    body { margin: 0; display: flex; height: 100vh; font-family: Arial, sans-serif; }
+    #viewer { flex: 1; position: relative; }
+    #panel { width: 360px; border-left: 1px solid #ddd; padding: 12px; overflow: auto; background: #fafafa; }
+    .mut { padding: 6px 0; border-bottom: 1px dashed #ddd; font-size: 13px; display:flex; align-items:center; gap:8px; }
+    .sw { width: 12px; height: 12px; border-radius: 2px; display:inline-block; border:1px solid #999; }
+    .note { color: #666; font-size: 12px; }
+    .warn { color: #b00020; font-size: 12px; }
+    code { background:#f0f0f0; padding:1px 4px; border-radius:4px; }
+  </style>
+</head>
+<body>
+  <div id="viewer"></div>
+  <div id="panel">
+    <h3>Mutation Viewer (3Dmol.js)</h3>
+    <div id="meta"></div>
+    <hr />
+    <div id="mutlist"></div>
+    <p class="note">Residue mapping: <code>PDB_resi = mutation_position + offset</code></p>
+    <p class="note">URL params: <code>?pdb=...&node=...&index=...&offset=0</code></p>
+    <div id="status" class="warn"></div>
+  </div>
+
+  <script>
+    function qp(k, d = null) {
+      const u = new URL(window.location.href);
+      return u.searchParams.get(k) ?? d;
+    }
+
+    function uniq(arr) {
+      return [...new Set(arr)];
+    }
+
+    function colorForIndex(i) {
+      // Distinct palette repeated if many residues
+      const palette = [
+        "#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00",
+        "#a65628","#f781bf","#999999","#66c2a5","#fc8d62",
+        "#8da0cb","#e78ac3","#a6d854","#ffd92f","#e5c494",
+        "#b3b3b3","#1b9e77","#d95f02","#7570b3","#e7298a"
+      ];
+      return palette[i % palette.length];
+    }
+
+    const pdbUrl = qp("pdb", "pdb/sample.pdb");
+    const nodeId = qp("node", "");
+    const idxUrl = qp("index", "mutations_index.json");
+    const offset = parseInt(qp("offset", "0"), 10);
+
+    document.getElementById("meta").innerHTML =
+      `<b>Node:</b> ${nodeId || "(none)"}<br>` +
+      `<b>PDB:</b> ${pdbUrl}<br>` +
+      `<b>Index:</b> ${idxUrl}<br>` +
+      `<b>Offset:</b> ${offset}`;
+
+    const viewer = $3Dmol.createViewer("viewer", { backgroundColor: "white" });
+
+    Promise.all([
+      fetch(idxUrl).then(r => {
+        if (!r.ok) throw new Error("Cannot load mutation index: " + idxUrl);
+        return r.json();
+      }),
+      fetch(pdbUrl).then(r => {
+        if (!r.ok) throw new Error("Cannot load PDB file: " + pdbUrl);
+        return r.text();
+      })
+    ]).then(([idx, pdbText]) => {
+      viewer.addModel(pdbText, "pdb");
+      viewer.setStyle({}, { cartoon: { color: "#d0d0d0" } });
+
+      const rec = idx[nodeId] || { aa_mutations: [], residue_positions: [] };
+      const muts = rec.aa_mutations || [];
+      const rawPos = rec.residue_positions || [];
+
+      // Map to PDB numbering and deduplicate
+      const positions = uniq(
+        rawPos.map(x => Number(x) + offset).filter(x => !Number.isNaN(x))
+      );
+
+      // Color each residue differently
+      positions.forEach((pos, i) => {
+        const c = colorForIndex(i);
+        viewer.setStyle(
+          { resi: pos },
+          {
+            stick: { color: c, radius: 0.24 },
+            sphere: { color: c, radius: 0.85 }
+          }
+        );
+        viewer.addLabel(String(pos), {
+          backgroundColor: "black",
+          fontColor: "white",
+          fontSize: 10,
+          inFront: true,
+          showBackground: true,
+          position: { resi: pos }
+        });
+      });
+
+      if (positions.length > 0) viewer.zoomTo({ resi: positions });
+      else viewer.zoomTo();
+      viewer.render();
+
+      // Sidebar mutation list with color swatches
+      const mutlist = document.getElementById("mutlist");
+      if (!nodeId) {
+        mutlist.innerHTML = "<p class='warn'>No node provided in URL (<code>node=...</code>).</p>";
+      } else if (!idx[nodeId]) {
+        mutlist.innerHTML = `<p class='warn'>Node not found in index: <b>${nodeId}</b></p>`;
+      } else {
+        let html = `<h4>AA Mutations (${muts.length})</h4>`;
+        if (muts.length === 0) {
+          html += "<p>No AA mutations listed for this node.</p>";
+        } else {
+          // Try to align mutation text with position list by index
+          for (let i = 0; i < muts.length; i++) {
+            const pdbPos = (rawPos[i] !== undefined && !Number.isNaN(Number(rawPos[i])))
+              ? Number(rawPos[i]) + offset
+              : null;
+            const c = colorForIndex(i);
+            html += `<div class="mut">
+              <span class="sw" style="background:${c};"></span>
+              <span><b>${muts[i]}</b>${pdbPos !== null ? ` → PDB ${pdbPos}` : ""}</span>
+            </div>`;
+          }
+        }
+        mutlist.innerHTML = html;
+      }
+    }).catch(err => {
+      document.getElementById("status").textContent = err.message;
+      console.error(err);
+    });
+  </script>
+</body>
+</html>
