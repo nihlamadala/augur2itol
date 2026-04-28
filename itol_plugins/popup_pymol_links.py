@@ -16,33 +16,6 @@ def _load_mut_index(path):
         return {}
 
 
-def _resistance_hits(aa_muts):
-    # Expand this list as needed for your pathogen/gene context
-    resistance_db = {
-        "H275Y": "Oseltamivir resistance (NA inhibitor)",
-        "E119V": "Reduced susceptibility (NA inhibitor)",
-        "R292K": "Reduced susceptibility (NA inhibitor)",
-        "N294S": "Reduced susceptibility (NA inhibitor)",
-        "I223R": "Reduced susceptibility (NA inhibitor)",
-    }
-    hits = []
-    for m in aa_muts:
-        key = str(m).strip().upper()
-        if key in resistance_db:
-            hits.append((key, resistance_db[key]))
-    return hits
-
-
-def _risk_level(n_res_hits, n_mut):
-    if n_res_hits >= 2:
-        return "High"
-    if n_res_hits == 1:
-        return "Medium"
-    if n_mut >= 8:
-        return "Elevated"
-    return "Low"
-
-
 def generate(ctx):
     leaves = ctx["leaves"]
     get_attr = ctx["get_attr"]
@@ -55,7 +28,7 @@ def generate(ctx):
     viewer_baseurl = (ctx.get("viewer_baseurl") or "https://nihlamadala.github.io/augur2itol/protein_viewer_3dmol.html").strip()
     viewer_pdb_path = (ctx.get("viewer_pdb_path") or "pdb/4fku.pdb").strip()
     viewer_index_path = (ctx.get("viewer_index_path") or "mutations_index.json").strip()
-    viewer_offset = str(ctx.get("viewer_offset", -16)).strip()
+    viewer_offset = str(ctx.get("viewer_offset", 0)).strip()
 
     # Mutation index for popup text
     mutation_index_file = (ctx.get("mutation_index_file") or "out/web/mutations_index.json").strip()
@@ -95,15 +68,8 @@ def generate(ctx):
         aa_muts = rec.get("aa_mutations", []) or []
         res_pos = rec.get("residue_positions", []) or []
 
-        # Resistance summary
-        res_hits = _resistance_hits(aa_muts)
-        risk = _risk_level(len(res_hits), len(aa_muts))
-        if res_hits:
-            res_text = "; ".join([f"{m} ({desc})" for m, desc in res_hits])
-        else:
-            res_text = "None detected in current marker panel"
-
         if aa_muts:
+            # show up to first 8 to keep popup compact
             shown = aa_muts[:8]
             extra = len(aa_muts) - len(shown)
             mut_text = ", ".join(escape(str(m)) for m in shown)
@@ -137,8 +103,6 @@ def generate(ctx):
             f"<tr><td style='padding:4px 0; color:#6b7280;'><b>Clade</b></td><td style='padding:4px 0; color:#111827;'>{escape(str(clade))}</td></tr>"
             f"<tr><td style='padding:4px 0; color:#6b7280;'><b>Mutation count</b></td><td style='padding:4px 0; color:#111827;'>{len(aa_muts)} (mapped residues: {len(res_pos)})</td></tr>"
             f"<tr><td style='padding:4px 0; color:#6b7280; vertical-align:top;'><b>AA mutations</b></td><td style='padding:4px 0; color:#111827;'>{mut_text}</td></tr>"
-            f"<tr><td style='padding:4px 0; color:#6b7280;'><b>Risk level</b></td><td style='padding:4px 0; color:#111827;'>{escape(risk)}</td></tr>"
-            f"<tr><td style='padding:4px 0; color:#6b7280; vertical-align:top;'><b>Resistance</b></td><td style='padding:4px 0; color:#111827;'>{escape(res_text)}</td></tr>"
             "</table>"
 
             "<div style='margin:12px 0; border-top:1px solid #e5e7eb;'></div>"
